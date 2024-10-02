@@ -1,3 +1,4 @@
+/////primera modificacion
 PImage icono1;
 PImage icono2;
 PImage icono3;
