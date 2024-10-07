@@ -4,13 +4,22 @@ import peasy.*;
 import processing.core.PShape;
 
 Serial myPort; // Objeto Serial
-//Objeto3D
-//--------------------------------------------------------------//
+
+//--------------------------------------------------------------//Objeto 3D
 PShape rocket; // Objeto para almacenar el modelo
 float roll = 0; // Rotación alrededor del eje X
 float pitch = 0; // Rotación alrededor del eje Y
 float yaw = 0; // Rotación alrededor del eje Z
 String inputData; // Variable para almacenar datos de entrada
+//---------------------------------------------------------------//Termometro
+float temperatura = 0; // Valor inicial de la temperatura
+float tempMin = 0;
+float tempMax = 30;
+
+float posX = 400; // Posición inicial en X del termómetro
+float posY = 397;  // Posición inicial en Y del termómetro
+float termometroAncho = 25; // Ancho del termómetro
+float termometroAlto = 250; // Alto del termómetro
 //---------------------------------------------------------------//
 
 GPlot plot;
@@ -130,6 +139,25 @@ void draw() {
   textSize(25);
   text("Trayectoria del Satélite",820,35);
   
+  ////////////////////////////////////////////////////////////////Termometro
+  fill(200);
+  rect(posX, posY, termometroAncho, termometroAlto); // Base del termómetro
+  
+  // Dibujar el nivel de temperatura
+  float tempAltura = map(temperatura, tempMin, tempMax, 0, termometroAlto);
+  color tempColor = color(map(temperatura, tempMin, tempMax, 0, 255), 0, map(temperatura, tempMin, tempMax, 255, 0));
+  fill(tempColor); // Cambia el color según el valor de temperatura
+  rect(posX, posY + termometroAlto - tempAltura, termometroAncho, tempAltura);
+  
+  // Dibujar escala de temperatura
+  drawScale();
+  
+  //Mostrar nivel de temperatura 
+  fill(255);
+  textSize(18);
+  textAlign(CENTER);
+  text("Temp: " + nf(temperatura, 1, 1) + "°C", posX + termometroAncho / 2, posY - 20); // Muestra la temperatura con un decimal
+
 
   ////////////////////////////////////////////////////////////////Modelo 3D
   // Integración de la gráfica 3D en el panel dos
@@ -185,6 +213,25 @@ void draw() {
   plot.endDraw(); 
 }
 
+//---------------------------------------------------//Termometro nivel
+void drawScale() {
+  int numTicks = 8; // Número de líneas de la escala
+  float tickSpacing = termometroAlto / (numTicks - 1); // Espaciado entre líneas
+  textSize(14);
+  fill(255);
+  
+  for (int i = 0; i < numTicks; i++) {
+    float y = posY + termometroAlto - i * tickSpacing;
+    line(posX - 8, y, posX, y); // Dibujar línea de escala
+    
+    // Mostrar valor de temperatura en cada línea de la escala
+    int tickTemp = int(map(i, 0, numTicks - 1, tempMin, tempMax));
+    textAlign(RIGHT, CENTER);
+    text(tickTemp + "°C", posX - 10, y);
+  }
+}
+
+
 ////////////////////////////////////////////////////////////////////Entrada serial CVS
 
 // Recepción de datos seriales
@@ -193,10 +240,13 @@ void serialEvent(Serial myPort) {
   if (inputData != null) {
     inputData = trim(inputData);
     String[] values = split(inputData, ',');
-    if (values.length == 3) {
+    if (values.length == 4) {
       roll = int(values[0]);
       pitch = int(values[1]);
       yaw = int(values[2]);
+      temperatura = int(values[3]); 
+      temperatura = constrain(temperatura, tempMin, tempMax); // Limita el valor dentro del rango
+      
       // Agrega los puntos a las respectivas trayectorias
       puntosRoll.add(currentIndex, roll);
       puntosPitch.add(currentIndex, pitch);
@@ -216,4 +266,10 @@ void serialEvent(Serial myPort) {
     }
   }
 }
-
+void keyPressed() {
+  int step = 10; // Tamaño del paso para mover el termómetro
+  if (keyCode == LEFT) posX -= step;
+  if (keyCode == RIGHT) posX += step;
+  if (keyCode == UP) posY -= step;
+  if (keyCode == DOWN) posY += step;
+}
