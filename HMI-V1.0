@@ -1,10 +1,25 @@
 import processing.serial.*;
+import grafica.*; 
+import peasy.*;
+import processing.core.PShape;
 
-Serial myPort;
-float roll = 0; // Ángulo de inclinación en el eje X
-float pitch = 0; // Ángulo de inclinación en el eje Y
-float yaw = 0;//Angulo de inclinacion en el eje Z
-String inputData = ""; // Variable para almacenar los datos seriales
+Serial myPort; // Objeto Serial
+//Objeto3D
+//--------------------------------------------------------------//
+PShape rocket; // Objeto para almacenar el modelo
+float roll = 0; // Rotación alrededor del eje X
+float pitch = 0; // Rotación alrededor del eje Y
+float yaw = 0; // Rotación alrededor del eje Z
+String inputData; // Variable para almacenar datos de entrada
+//---------------------------------------------------------------//
+
+GPlot plot;
+GPointsArray puntosRoll, puntosPitch, puntosYaw; // Para almacenar los puntos de cada trayectoria
+int maxPoints = 100; // Número máximo de puntos a mostrar en los gráficos
+int currentIndex = 0; // Índice para el tiempo
+int delayCount = 0; // Contador para reducir la frecuencia de muestreo
+int updateRate = 5; // Cambia este valor para ajustar la frecuencia de actualización (más alto = más lento)
+
 
 //Declararacion de img
 PImage icono1;
@@ -18,19 +33,45 @@ void setup() {
   smooth();
   frameRate(60);
   
-    // Lista de puertos seriales disponibles
-  printArray(Serial.list());
-
-  // Abre el puerto serial (ajusta el puerto según el listado que te muestra el monitor)
-  myPort = new Serial(this, Serial.list()[0], 115200);
-  myPort.bufferUntil('\n'); // Lee datos hasta encontrar un salto de línea
-
   // Cargar la imagen que está en la carpeta "data"
   icono1 = loadImage("rocket.png");
   icono2 = loadImage("line-chart.png");
   icono3 = loadImage("antena.png");
   icono4 = loadImage("logo.png");
   
+  //--------------------------------------------- Cargar el modelo 3D
+  rocket = loadShape("Rocket1.obj");
+  if (rocket == null) {
+    println("Error: modelo no cargado. Verifica el nombre y la ubicación del archivo.");
+  }
+  //----------------------------------------------Grafica del giroscopio
+  // Inicializa los puntos para las trayectorias
+  puntosRoll = new GPointsArray();
+  puntosPitch = new GPointsArray();
+  puntosYaw = new GPointsArray();
+
+   // Crea un nuevo gráfico para Roll, Pitch y Yaw juntos
+  plot = new GPlot(this);
+  plot.setPos(350, 70);
+  plot.setOuterDim(380,270);
+  plot.getTitle().setText("Trayectorias Roll, Pitch y Yaw");
+  plot.getXAxis().setAxisLabelText("Tiempo");
+  plot.getYAxis().setAxisLabelText("Grados");
+
+  // Ajustar cuadrícula
+  plot.setGridLineWidth(0.5);  // Grosor de las líneas de la cuadrícula
+  plot.setGridLineColor(color(200));  // Color gris claro para las líneas de la cuadrícula
+
+  // Ajustar los puntos
+  plot.setPoints(puntosRoll);  // Iniciar con los puntos de Roll, pero se actualizarán
+  plot.setYLim(-180, 180);  // Límites del eje Y para ángulos entre -180° y 180°
+  
+//-------------------------------------------------- // Lista de puertos seriales disponibles
+  printArray(Serial.list());
+
+  // Abre el puerto serial (ajusta el puerto según el listado que te muestra el monitor)
+  myPort = new Serial(this, Serial.list()[0], 115200);
+  myPort.bufferUntil('\n'); // Lee datos hasta encontrar un salto de línea
 }
 void draw() {
   background(50);
@@ -62,7 +103,7 @@ void draw() {
   // Dibujar una línea vertical para separar el panel 2
   stroke(100);  //Color
   strokeWeight(1.5);  // Grosor 
-  line(690, 90, 690, 310);  // Línea desde (690, 20) hasta (690, 350)
+  line(740, 90, 740, 310);  // Línea(punto a punto) desde (690, 20) hasta (690, 350)
 
 
   // Imagenes Cargadas 
@@ -83,47 +124,96 @@ void draw() {
   textSize(25);
   text("Graficas",80,375);
   textSize(25);
-  text("ESTATUS",80,35);
+  text("POSICIÓN",80,35);
   textSize(25);
-  text("Posición ",400,35);
+  text("Grafica ",400,35);
   textSize(25);
   text("Trayectoria del Satélite",820,35);
   
 
-  ////////////////////////////////////////////////////////////////Graficas 
-  //background(255);
-  fill(0);  // Establece el color de relleno a negro
-  textSize(25);  // Establece el tamaño del texto
-  text("Roll: " + roll, 425, 250);  // Muestra los datos recibidos
-  text("Pitch: " + pitch, 425, 275);  // Muestra los datos recibidos
-  text("Yaw: " + yaw, 425, 300);  // Muestra los datos recibidos
+  ////////////////////////////////////////////////////////////////Modelo 3D
+  // Integración de la gráfica 3D en el panel dos
+  pushMatrix();
+  translate(225, 225, 100); // Panel 1
+  scale(3.2); // Ajusta la escala del modelo
   
-  lights(); // Agregar luces a la escena
-  translate(1150, 300, 80); // Mover el origen al centro de la ventana
-  rotateX(radians(pitch)); //Rotar según el roll
-  rotateY(radians(yaw)); // Rotar según el pitch
-  rotateZ(radians(roll));//Rotar según el yaw
+   // Rotación del modelo según los datos del giroscopio
+  rotateX(-HALF_PI);
+  rotateX(radians(pitch));
+  rotateZ(radians(yaw));
+  rotateY(radians(roll));
+  
+  
+  shape(rocket); // Dibuja el modelo 3D
+  popMatrix(); // Cierra el pushMatrix() correspondiente para evitar el error
+  
+   // Mostrar las lecturas de los ejes en el HMI
+  //fill(255);
+  textSize(22);
+  fill(255,0,0);
+  text("Roll: " + roll, 260, 260);
+  fill(0,255,0);
+  text("Pitch: " + pitch, 260, 285);
+  fill(0,0,255);
+  text("Yaw: " + yaw, 255, 310);
+  
+  ////////////////////////////////////////////////////////////////////Grafica giros
+  // Actualizar el gráfico con los nuevos datos de Roll, Pitch y Yaw
+  plot.setPoints(puntosRoll);  // Establecer los puntos de Roll
+  plot.beginDraw();
+  plot.drawBackground();
+  plot.drawBox();
+   // Dibujar la cuadrícula
+  plot.drawGridLines(GPlot.BOTH);  // Cuadrícula tanto en el eje X como en el eje Y
 
-  // Dibujar figura
-  stroke(0);
-  fill(150, 0, 0, 150);
-  box(50,100,50); // Tamaño 
-}
-////////////////////////////////////////////////////////////////////Entrada serial CVS
-void serialEvent(Serial myPort) {
-  // Leer los datos seriales
-  inputData = myPort.readStringUntil('\n');
+  plot.drawXAxis();
+  plot.drawYAxis();
+  plot.drawTitle();
+  plot.setLineColor(color(255, 0, 0)); // Rojo para Roll
+  plot.drawLines();  // Dibujar la línea de Roll
   
-  // Asegurarse de que se reciban datos válidos
+  // Dibujar Pitch
+  plot.setPoints(puntosPitch);
+  plot.setLineColor(color(0, 255, 0)); // Verde para Pitch
+  plot.drawLines();  // Dibujar la línea de Pitch
+
+  // Dibujar Yaw
+  plot.setPoints(puntosYaw);
+  plot.setLineColor(color(0, 0, 255)); // Azul para Yaw
+  plot.drawLines();  // Dibujar la línea de Yaw
+
+  plot.endDraw(); 
+}
+
+////////////////////////////////////////////////////////////////////Entrada serial CVS
+
+// Recepción de datos seriales
+void serialEvent(Serial myPort) {
+  inputData = myPort.readStringUntil('\n');
   if (inputData != null) {
-    inputData = trim(inputData); // Eliminar espacios en blanco
-    String[] values = split(inputData, ','); // Dividir los valores CSV
-    
-    // Asegurarse de que haya dos valores (roll y pitch)
+    inputData = trim(inputData);
+    String[] values = split(inputData, ',');
     if (values.length == 3) {
-      roll = int(values[0]); //  valor a float (roll)
-      pitch = int(values[1]); //  valor a float (pitch)
-      yaw = int(values[2]); // valor a float (yaw)
+      roll = int(values[0]);
+      pitch = int(values[1]);
+      yaw = int(values[2]);
+      // Agrega los puntos a las respectivas trayectorias
+      puntosRoll.add(currentIndex, roll);
+      puntosPitch.add(currentIndex, pitch);
+      puntosYaw.add(currentIndex, yaw);
+      currentIndex++; // Incrementar el índice de tiempo
+
+      // Limitar la cantidad de puntos en el gráfico
+      if (puntosRoll.getNPoints() > maxPoints) {
+        puntosRoll.remove(0);  // Eliminar el primer punto para mantener el límite
+      }
+      if (puntosPitch.getNPoints() > maxPoints) {
+        puntosPitch.remove(0);
+      }
+      if (puntosYaw.getNPoints() > maxPoints) {
+        puntosYaw.remove(0);
+      }
     }
   }
 }
+
