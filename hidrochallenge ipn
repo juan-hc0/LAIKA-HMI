@@ -1,0 +1,152 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+#include <BluetoothSerial.h>
+#include <ESP32Servo.h>
+
+BluetoothSerial SerialBT;
+Servo myServo;
+
+#define PRECIONNIVELDELMAR (1025)
+#define Button_PIN 2
+#define SCREEN_WIDTH 128 
+#define SCREEN_HEIGHT 64 
+#define OLED_RESET    -1 
+#define SCREEN_ADDRESS 0x3C
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_BME280 bme;
+
+float referenciaN = 0.0;
+int alturaMaxima = 0; 
+int alturaAct = 0;
+bool subiendo = true;  // Estado inicial
+
+void setup() {
+  Serial.begin(115200);
+  SerialBT.begin("ESP32-BT-JJ");  
+  Serial.println("Bluetooth iniciado. Ahora puedes emparejarlo.");
+  pinMode(Button_PIN, INPUT);
+  myServo.attach(18);
+
+  if (!bme.begin(0x76)) {  //direccion dle sensor
+    Serial.println("No se encontró un BME280, verifica la conexión!");
+    while (1);
+  }
+  //pantalla
+  display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
+  display.clearDisplay();
+  display.display();
+  delay(500);
+}
+
+void loop() {
+  if(digitalRead(Button_PIN) == HIGH){
+   referenciaN = bme.readAltitude(PRECIONNIVELDELMAR);
+   alturaMaxima = 1;
+   myServo.write(0);//Reinicio del servo 
+   Serial.println("Nueva referencia y altura maxima reiniciada");
+  }
+  float nuevaAltitud = bme.readAltitude(PRECIONNIVELDELMAR) - referenciaN;//altitud restablecida a "0"
+
+  float temperatura = bme.readTemperature();
+  float humedad = bme.readHumidity();
+  float presion = bme.readPressure() / 100.0F;  // Convertir a hPa
+  int altitud = nuevaAltitud;
+
+  String estado;
+
+  if (altitud >= -1 && altitud <= 1){
+    estado = "ESTABLE";
+  } else{
+    if (altitud > alturaMaxima) {
+    alturaMaxima = altitud;
+    estado = "SUBIENDO";
+  } else if (altitud < alturaMaxima) {
+    estado = "BAJANDO";
+    alturaAct = altitud;//Altura en que se activo el servo
+    myServo.write(150);//Activacion del servo 
+   }
+  }
+
+  if(estado == "SUBIENDO"){
+    SerialBT.print("Altura Maxima registrada:");
+    SerialBT.println(alturaMaxima);
+    Serial.print("Altura Maxima registrada: ");
+    Serial.println(alturaMaxima);
+  }
+    if(estado == "BAJANDO"){
+    SerialBT.print("Altura de activacion:");
+    SerialBT.println(alturaAct);
+    Serial.print("Altura de activacion: ");
+    Serial.println(alturaAct);
+  }
+  
+  // Enviar datos por Serial
+  Serial.print("Temperatura: ");
+  Serial.print(temperatura);
+  Serial.println(" °C ");
+  
+  Serial.print("Humedad: ");
+  Serial.print(humedad);
+  Serial.println(" % ");
+
+  Serial.print("Presion: ");
+  Serial.print(presion);
+  Serial.println(" hPa ");
+
+  Serial.print("Alt: ");
+  Serial.print(altitud);
+  Serial.println(" m ");
+  Serial.println();
+
+  // Enviar datos por Bluetooth
+  SerialBT.print("Temperatura: ");
+  SerialBT.print(temperatura);
+  SerialBT.println(" °C ");
+
+  SerialBT.print("Humedad: ");
+  SerialBT.print(humedad);
+  SerialBT.println(" % ");
+
+  SerialBT.print("Presion: ");
+  SerialBT.print(presion);
+  SerialBT.println(" hPa ");
+
+  SerialBT.print("Altitud: ");
+  SerialBT.print(altitud);
+  SerialBT.println(" m ");
+  SerialBT.println();
+
+  // Impresion en pantalla
+  display.clearDisplay();
+
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.print("Presion: ");
+  display.print(presion);
+  display.println(" hPa");
+
+  display.setCursor(0, 18);
+  display.print("Altitud: ");
+  display.print(altitud);
+  display.println(" m");
+
+  display.setCursor(0, 34);
+  display.print("Altura Max: ");
+  display.print(alturaMaxima);
+  display.println(" m");  
+
+  display.setCursor(0, 50);
+  display.print("Alt de Act: ");
+  display.print(alturaAct);
+  display.println(" m ");
+
+  display.display();
+
+  // Esperar antes de la siguiente actualización
+  delay(10);
+}
