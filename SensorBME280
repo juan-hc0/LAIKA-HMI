@@ -2,15 +2,15 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 
-#define BME280_I2C_ADDRESS 0x76  // Dirección común del sensor
-#define PRECIONNIVELDELMAR (1025.0) // hPa, ajusta según tu localidad (CDMX en tu caso)
+#define BME280_I2C_ADDRESS 0x76  
+#define PRECIONNIVELDELMAR (1025.0) //  localidad (CDMX)
 
 Adafruit_BME280 bme;
 unsigned long delayTime;
 
 void setup() {
   Serial.begin(9600);
-  while (!Serial); // Espera a que el monitor serial esté listo (importante para algunas placas)
+  while (!Serial);
   
   Serial.println(F("Lectura de altitud con BME280"));
   
@@ -31,7 +31,7 @@ void setup() {
                   Adafruit_BME280::FILTER_X16,    // Suavizado
                   Adafruit_BME280::STANDBY_MS_0_5);
 
-  delayTime = 100; // Una lectura por segundo (puedes reducirlo si quieres más frecuencia)
+  delayTime = 100; 
 }
 
 void loop() {
